@@ -51,6 +51,8 @@ pipeline {
                 echo '=========================================='
 
                 script {
+                    def scannerHome = tool 'SonarQube Scanner'
+
                     writeFile file: 'sonar-project.properties', text: """
 sonar.projectKey=${SONAR_PROJECT_KEY}
 sonar.projectName=Python Code Disasters
@@ -63,7 +65,7 @@ sonar.python.version=3.8
 
                     withSonarQubeEnv('SonarQube') {
                         sh """
-                            sonar-scanner \
+                            ${scannerHome}/bin/sonar-scanner \
                                 -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
                                 -Dsonar.sources=. \
                                 -Dsonar.host.url=${SONAR_HOST_URL} \
