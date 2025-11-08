@@ -67,9 +67,7 @@ sonar.python.version=3.8
                         sh """
                             ${scannerHome}/bin/sonar-scanner \
                                 -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
-                                -Dsonar.sources=. \
-                                -Dsonar.host.url=${SONAR_HOST_URL} \
-                                -Dsonar.login=\${SONAR_AUTH_TOKEN}
+                                -Dsonar.sources=.
                         """
                     }
                 }
