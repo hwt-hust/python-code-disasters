@@ -250,8 +250,6 @@ sonar.python.version=3.8
                     echo "Results Location: ${RESULTS_BUCKET}/${RESULTS_FILE}"
                 }
             }
-
-            cleanWs()
         }
 
         success {
