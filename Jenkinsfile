@@ -97,6 +97,26 @@ sonar.python.version=3.8
             }
         }
 
+        stage('Setup Google Cloud SDK') {
+            when {
+                expression { env.RUN_HADOOP_JOB == 'true' }
+            }
+            steps {
+                script {
+                    sh '''
+                        if ! command -v gcloud &> /dev/null; then
+                            echo "Installing Google Cloud SDK..."
+                            curl https://sdk.cloud.google.com | bash -s -- --disable-prompts --install-dir=$HOME
+                            export PATH=$HOME/google-cloud-sdk/bin:$PATH
+                            echo "export PATH=$HOME/google-cloud-sdk/bin:$PATH" >> $HOME/.bashrc
+                        fi
+                        gcloud --version || true
+                        gsutil --version || true
+                    '''
+                }
+            }
+        }
+
         stage('Build Hadoop Job') {
             when {
                 expression { env.RUN_HADOOP_JOB == 'true' }
@@ -117,6 +137,7 @@ sonar.python.version=3.8
             }
             steps {
                 sh '''
+                    export PATH=$HOME/google-cloud-sdk/bin:$PATH
                     mkdir -p hadoop-input
                     find . -name "*.py" -type f -exec cp {} hadoop-input/ \\;
                     gsutil -m rm -rf gs://${GCP_PROJECT_ID}-hadoop-input/* || true
@@ -131,6 +152,7 @@ sonar.python.version=3.8
             }
             steps {
                 sh '''
+                    export PATH=$HOME/google-cloud-sdk/bin:$PATH
                     gcloud dataproc jobs submit hadoop \\
                         --cluster=${HADOOP_CLUSTER_NAME} \\
                         --region=${GCP_REGION} \\
@@ -149,6 +171,7 @@ sonar.python.version=3.8
             }
             steps {
                 sh '''
+                    export PATH=$HOME/google-cloud-sdk/bin:$PATH
                     sleep 10
                     mkdir -p results
                     gsutil -m cp -r gs://${GCP_PROJECT_ID}-hadoop-output/run-${BUILD_NUMBER}/* results/ || true
