@@ -106,7 +106,6 @@ sonar.python.version=3.8
                     sh '''
                         export PATH=$HOME/google-cloud-sdk/bin:$PATH
                         if ! command -v gcloud &> /dev/null; then
-                            echo "Installing Google Cloud SDK..."
                             cd $HOME
                             curl -O https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-x86_64.tar.gz
                             tar -xzf google-cloud-cli-linux-x86_64.tar.gz
@@ -115,6 +114,8 @@ sonar.python.version=3.8
                         fi
                         gcloud --version
                         gsutil --version
+                        gcloud auth activate-service-account --key-file=/var/secrets/google/key.json
+                        gcloud config set project ${GCP_PROJECT_ID}
                     '''
                 }
             }
