@@ -107,8 +107,11 @@ sonar.python.version=3.8
                         export PATH=$HOME/google-cloud-sdk/bin:$PATH
                         if ! command -v gcloud &> /dev/null; then
                             echo "Installing Google Cloud SDK..."
-                            rm -rf $HOME/google-cloud-sdk
-                            curl https://sdk.cloud.google.com | bash -s -- --disable-prompts --install-dir=$HOME
+                            cd $HOME
+                            curl -O https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-x86_64.tar.gz
+                            tar -xzf google-cloud-cli-linux-x86_64.tar.gz
+                            rm google-cloud-cli-linux-x86_64.tar.gz
+                            ./google-cloud-sdk/install.sh --quiet --usage-reporting false --path-update false
                         fi
                         gcloud --version
                         gsutil --version
