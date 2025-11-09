@@ -160,8 +160,8 @@ sonar.python.version=3.8
                     gcloud dataproc jobs submit hadoop \\
                         --cluster=${HADOOP_CLUSTER_NAME} \\
                         --region=${GCP_REGION} \\
-                        --jar=hadoop-jobs/line-counter/target/line-counter-1.0-SNAPSHOT.jar \\
                         --class=com.cloudinfra.LineCounter \\
+                        --jars=hadoop-jobs/line-counter/target/line-counter-1.0-SNAPSHOT.jar \\
                         -- \\
                         gs://${GCP_PROJECT_ID}-hadoop-input \\
                         gs://${GCP_PROJECT_ID}-hadoop-output/run-${BUILD_NUMBER}
