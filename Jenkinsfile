@@ -102,8 +102,11 @@ sonar.python.version=3.8
                 expression { env.RUN_HADOOP_JOB == 'true' }
             }
             steps {
-                dir('hadoop-jobs/line-counter') {
-                    sh 'mvn clean package -DskipTests'
+                script {
+                    def mvnHome = tool name: 'Maven', type: 'maven'
+                    dir('hadoop-jobs/line-counter') {
+                        sh "${mvnHome}/bin/mvn clean package -DskipTests"
+                    }
                 }
             }
         }
