@@ -22,10 +22,6 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                echo '=========================================='
-                echo 'Stage 1: Checking out source code from GitHub'
-                echo '=========================================='
-
                 checkout scm
 
                 script {
@@ -38,18 +34,11 @@ pipeline {
                         returnStdout: true
                     ).trim()
                 }
-
-                echo "Checked out commit: ${env.GIT_COMMIT_SHORT}"
-                echo "Commit message: ${env.GIT_COMMIT_MSG}"
             }
         }
 
         stage('SonarQube Analysis') {
             steps {
-                echo '=========================================='
-                echo 'Stage 2: Running SonarQube Code Analysis'
-                echo '=========================================='
-
                 script {
                     def scannerHome = tool 'SonarQube Scanner'
 
@@ -71,52 +60,38 @@ sonar.python.version=3.8
                         """
                     }
                 }
-
-                echo "SonarQube analysis completed"
             }
         }
 
         stage('Quality Gate Check') {
             steps {
-                echo '=========================================='
-                echo 'Stage 3: Checking SonarQube Quality Gate'
-                echo '=========================================='
-
                 script {
-                    timeout(time: 5, unit: 'MINUTES') {
-                        def qg = waitForQualityGate()
+                    sleep(30)
 
-                        echo "Quality Gate Status: ${qg.status}"
+                    def blockerCount = sh(
+                        script: """
+                            curl -s -u \${SONAR_AUTH_TOKEN}: \
+                            "${SONAR_HOST_URL}/api/issues/search?componentKeys=${SONAR_PROJECT_KEY}&severities=BLOCKER&resolved=false" \
+                            | grep -o '"total":[0-9]*' | head -1 | cut -d':' -f2
+                        """,
+                        returnStdout: true
+                    ).trim()
 
-                        def blockerCount = sh(
-                            script: """
-                                curl -s -u \${SONAR_AUTH_TOKEN}: \
-                                "${SONAR_HOST_URL}/api/issues/search?componentKeys=${SONAR_PROJECT_KEY}&severities=BLOCKER&resolved=false" \
-                                | grep -o '"total":[0-9]*' | head -1 | cut -d':' -f2
-                            """,
-                            returnStdout: true
-                        ).trim()
+                    env.BLOCKER_COUNT = blockerCount ?: '0'
 
-                        env.BLOCKER_COUNT = blockerCount ?: '0'
+                    if (env.BLOCKER_COUNT.toInteger() > 0) {
+                        env.RUN_HADOOP_JOB = 'false'
 
-                        echo "Number of blocker issues found: ${env.BLOCKER_COUNT}"
+                        sh """
+                            echo "Blocker Issues Details:" > blocker-issues.txt
+                            curl -s -u \${SONAR_AUTH_TOKEN}: \
+                            "${SONAR_HOST_URL}/api/issues/search?componentKeys=${SONAR_PROJECT_KEY}&severities=BLOCKER&resolved=false" \
+                            >> blocker-issues.txt
+                        """
 
-                        if (env.BLOCKER_COUNT.toInteger() > 0) {
-                            env.RUN_HADOOP_JOB = 'false'
-                            echo "⚠️  BLOCKER ISSUES FOUND - Hadoop job will NOT be executed"
-
-                            sh """
-                                echo "Blocker Issues Details:" > blocker-issues.txt
-                                curl -s -u \${SONAR_AUTH_TOKEN}: \
-                                "${SONAR_HOST_URL}/api/issues/search?componentKeys=${SONAR_PROJECT_KEY}&severities=BLOCKER&resolved=false" \
-                                >> blocker-issues.txt
-                            """
-
-                            archiveArtifacts artifacts: 'blocker-issues.txt', fingerprint: true
-                        } else {
-                            env.RUN_HADOOP_JOB = 'true'
-                            echo "✓ No blocker issues found - Hadoop job will be executed"
-                        }
+                        archiveArtifacts artifacts: 'blocker-issues.txt', fingerprint: true
+                    } else {
+                        env.RUN_HADOOP_JOB = 'true'
                     }
                 }
             }
@@ -127,17 +102,8 @@ sonar.python.version=3.8
                 expression { env.RUN_HADOOP_JOB == 'true' }
             }
             steps {
-                echo '=========================================='
-                echo 'Stage 4: Building Hadoop MapReduce Job'
-                echo '=========================================='
-
                 dir('hadoop-jobs/line-counter') {
-                    sh '''
-                        mvn clean package -DskipTests
-
-                        echo "JAR file created:"
-                        ls -lh target/*.jar
-                    '''
+                    sh 'mvn clean package -DskipTests'
                 }
             }
         }
@@ -147,19 +113,9 @@ sonar.python.version=3.8
                 expression { env.RUN_HADOOP_JOB == 'true' }
             }
             steps {
-                echo '=========================================='
-                echo 'Stage 5: Preparing Data for Hadoop Processing'
-                echo '=========================================='
-
                 sh '''
                     mkdir -p hadoop-input
                     find . -name "*.py" -type f -exec cp {} hadoop-input/ \\;
-
-                    find . -name "*.py" -type f > file-list.txt
-
-                    echo "Files to be processed:"
-                    cat file-list.txt
-
                     gsutil -m rm -rf gs://${GCP_PROJECT_ID}-hadoop-input/* || true
                     gsutil -m cp -r hadoop-input/* gs://${GCP_PROJECT_ID}-hadoop-input/
                 '''
@@ -171,24 +127,16 @@ sonar.python.version=3.8
                 expression { env.RUN_HADOOP_JOB == 'true' }
             }
             steps {
-                echo '=========================================='
-                echo 'Stage 6: Submitting Hadoop MapReduce Job'
-                echo '=========================================='
-
-                script {
-                    sh '''
-                        gcloud dataproc jobs submit hadoop \\
-                            --cluster=${HADOOP_CLUSTER_NAME} \\
-                            --region=${GCP_REGION} \\
-                            --jar=hadoop-jobs/line-counter/target/line-counter-1.0-SNAPSHOT.jar \\
-                            --class=com.cloudinfra.LineCounter \\
-                            -- \\
-                            gs://${GCP_PROJECT_ID}-hadoop-input \\
-                            gs://${GCP_PROJECT_ID}-hadoop-output/run-${BUILD_NUMBER}
-                    '''
-                }
-
-                echo "Hadoop job submitted successfully"
+                sh '''
+                    gcloud dataproc jobs submit hadoop \\
+                        --cluster=${HADOOP_CLUSTER_NAME} \\
+                        --region=${GCP_REGION} \\
+                        --jar=hadoop-jobs/line-counter/target/line-counter-1.0-SNAPSHOT.jar \\
+                        --class=com.cloudinfra.LineCounter \\
+                        -- \\
+                        gs://${GCP_PROJECT_ID}-hadoop-input \\
+                        gs://${GCP_PROJECT_ID}-hadoop-output/run-${BUILD_NUMBER}
+                '''
             }
         }
 
@@ -197,36 +145,18 @@ sonar.python.version=3.8
                 expression { env.RUN_HADOOP_JOB == 'true' }
             }
             steps {
-                echo '=========================================='
-                echo 'Stage 7: Collecting and Displaying Results'
-                echo '=========================================='
-
                 sh '''
                     sleep 10
-
                     mkdir -p results
                     gsutil -m cp -r gs://${GCP_PROJECT_ID}-hadoop-output/run-${BUILD_NUMBER}/* results/ || true
 
-                    echo ""
-                    echo "=========================================="
-                    echo "HADOOP JOB RESULTS - Line Count per File"
-                    echo "=========================================="
-
                     if [ -f results/part-r-00000 ]; then
-                        cat results/part-r-00000 | while read line; do
-                            echo "$line"
-                        done | tee ${RESULTS_FILE}
+                        cat results/part-r-00000 | tee ${RESULTS_FILE}
                     else
-                        echo "Results file not found. Checking all result files..."
                         find results -type f -exec cat {} \\; | tee ${RESULTS_FILE}
                     fi
 
-                    echo "=========================================="
-
                     gsutil cp ${RESULTS_FILE} ${RESULTS_BUCKET}/
-
-                    echo ""
-                    echo "Results saved to: ${RESULTS_BUCKET}/${RESULTS_FILE}"
                 '''
 
                 archiveArtifacts artifacts: "${RESULTS_FILE}", fingerprint: true
@@ -236,28 +166,9 @@ sonar.python.version=3.8
 
     post {
         always {
-            echo '=========================================='
-            echo 'Pipeline Execution Summary'
-            echo '=========================================='
-
             script {
-                echo "Build Number: ${BUILD_NUMBER}"
-                echo "Commit: ${env.GIT_COMMIT_SHORT}"
-                echo "Blocker Issues: ${env.BLOCKER_COUNT ?: 'Not checked'}"
-                echo "Hadoop Job Executed: ${env.RUN_HADOOP_JOB ?: 'No'}"
-
-                if (env.RUN_HADOOP_JOB == 'true') {
-                    echo "Results Location: ${RESULTS_BUCKET}/${RESULTS_FILE}"
-                }
+                echo "Build: ${BUILD_NUMBER} | Commit: ${env.GIT_COMMIT_SHORT} | Blockers: ${env.BLOCKER_COUNT ?: '0'} | Hadoop: ${env.RUN_HADOOP_JOB ?: 'No'}"
             }
-        }
-
-        success {
-            echo '✓ Pipeline completed successfully!'
-        }
-
-        failure {
-            echo '✗ Pipeline failed. Check logs for details.'
         }
     }
 }
