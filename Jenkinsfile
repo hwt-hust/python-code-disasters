@@ -104,14 +104,14 @@ sonar.python.version=3.8
             steps {
                 script {
                     sh '''
+                        export PATH=$HOME/google-cloud-sdk/bin:$PATH
                         if ! command -v gcloud &> /dev/null; then
                             echo "Installing Google Cloud SDK..."
+                            rm -rf $HOME/google-cloud-sdk
                             curl https://sdk.cloud.google.com | bash -s -- --disable-prompts --install-dir=$HOME
-                            export PATH=$HOME/google-cloud-sdk/bin:$PATH
-                            echo "export PATH=$HOME/google-cloud-sdk/bin:$PATH" >> $HOME/.bashrc
                         fi
-                        gcloud --version || true
-                        gsutil --version || true
+                        gcloud --version
+                        gsutil --version
                     '''
                 }
             }
